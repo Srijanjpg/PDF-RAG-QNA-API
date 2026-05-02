@@ -1,42 +1,85 @@
 # PDF RAG API
 
-FastAPI service where users upload PDFs, wait for background indexing, then ask grounded questions over the uploaded document.
+FastAPI service for uploading PDFs and asking grounded questions over their contents. The app extracts text in the background, splits it into token-aware chunks, stores embeddings in PostgreSQL with `pgvector`, and uses retrieval-augmented generation to answer questions with citations from the source document.
 
-## Stack
+## What It Does
 
-- FastAPI with async endpoints and `BackgroundTasks`
-- PostgreSQL with `pgvector` for vector storage and similarity search
-- Redis for cached answers to repeated questions
-- NVIDIA NIM hosted inference for embeddings and `openai/gpt-oss-120b` answer generation
-- OpenAI-compatible Python client for calling NVIDIA's API protocol
-- `pypdf` for PDF text extraction
+1. Upload a PDF.
+2. Index it asynchronously.
+3. Ask questions against the document.
+4. Receive answers grounded in retrieved passages, with citations and cached responses for repeated queries.
 
-## Run
+## Key Features
+
+- PDF upload with size validation and background processing
+- Token-aware chunking with overlap to preserve context across page boundaries
+- Vector search with PostgreSQL and `pgvector`
+- Redis-backed answer caching
+- Citation-rich responses that point back to the source chunks
+- Docker-based local development setup
+
+## Tech Stack
+
+- FastAPI with async endpoints
+- PostgreSQL + `pgvector` for similarity search
+- Redis for caching
+- NVIDIA NIM-compatible inference for embeddings and answer generation
+- `pypdf` for PDF extraction
+- `pydantic-settings` for configuration
+
+## Getting Started
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Set `NVIDIA_API_KEY` in `.env` before uploading or asking questions.
-
-API docs:
+Open the API docs at:
 
 ```text
 http://localhost:8000/docs
 ```
 
-## Endpoints
+Before uploading or asking questions, set either `NVIDIA_API_KEY` or `OPENAI_API_KEY` in `.env`.
 
-```text
-POST   /documents/upload
-GET    /documents/{document_id}/status
-POST   /documents/{document_id}/ask
-DELETE /documents/{document_id}
-```
+## API Endpoints
 
-## Retrieval Notes
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/documents/upload` | Upload a PDF for background indexing |
+| `GET` | `/documents/{document_id}/status` | Check indexing status and any error details |
+| `POST` | `/documents/{document_id}/ask` | Ask a grounded question about the uploaded PDF |
+| `DELETE` | `/documents/{document_id}` | Remove the document and its indexed chunks |
 
-PDF text is split into token-aware chunks with overlap. The overlap helps preserve context that crosses page or paragraph boundaries. At query time, the API embeds the question, retrieves top matching chunks filtered by `document_id`, drops weak matches, and sends the best chunks to the generation model with page metadata for citations.
+## Configuration
 
-The default embedding model is `nvidia/nv-embedqa-e5-v5`, which uses 1024-dimensional vectors. Document chunks are embedded with `input_type=passage`; user questions are embedded with `input_type=query`. The default chunk size is 320 tokens with 50 tokens of overlap so chunks stay under NVIDIA's 512-token embedding limit even when tokenizer counts differ. If you change `EMBEDDING_MODEL` or `EMBEDDING_DIMENSIONS`, use a fresh database volume or add a migration because the `pgvector` column dimension is part of the table schema.
+The main settings live in [app/config.py](app/config.py). Common values include:
+
+| Setting | Default |
+| --- | --- |
+| `DATABASE_URL` | `postgresql+asyncpg://rag:rag@localhost:5432/rag` |
+| `REDIS_URL` | `redis://localhost:6379/0` |
+| `UPLOAD_DIR` | `uploads/` |
+| `EMBEDDING_MODEL` | `nvidia/nv-embedqa-e5-v5` |
+| `GENERATION_MODEL` | `openai/gpt-oss-120b` |
+| `CHUNK_TOKENS` | `320` |
+| `CHUNK_OVERLAP_TOKENS` | `50` |
+| `RETRIEVAL_TOP_K` | `8` |
+| `RETRIEVAL_MIN_SCORE` | `0.20` |
+
+## How Retrieval Works
+
+Uploaded PDFs are extracted into pages, chunked with overlap, and embedded as passages. When a question arrives, the service embeds the query, retrieves the most relevant chunks for that specific document, filters weak matches, and sends the strongest evidence to the generation model along with page metadata. If the same question is asked again, the cached response is returned when available.
+
+The default embedding model uses 1024-dimensional vectors. If you change `EMBEDDING_MODEL` or `EMBEDDING_DIMENSIONS`, create a fresh database volume or add a migration so the `pgvector` column definition stays in sync.
+
+## Project Structure
+
+- [app/main.py](app/main.py) bootstraps the FastAPI app and static UI.
+- [app/api.py](app/api.py) contains the document upload, status, ask, and delete routes.
+- [app/tasks.py](app/tasks.py) handles PDF extraction, chunking, embedding, and persistence.
+- [app/services/](app/services) contains the PDF, chunking, cache, and LLM helpers.
+
+## License
+
+No license has been specified yet.
