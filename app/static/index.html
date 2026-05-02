@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF RAG Console</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-label="PDF question answering workspace">
+        <aside class="sidebar" aria-label="Document controls">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">R</div>
+            <div>
+              <h1>PDF RAG</h1>
+              <p>NVIDIA NIM + Postgres retrieval</p>
+            </div>
+          </div>
+
+          <form id="upload-form" class="upload-panel">
+            <label class="file-drop" for="pdf-input">
+              <input id="pdf-input" name="file" type="file" accept="application/pdf" />
+              <span class="file-icon" aria-hidden="true">PDF</span>
+              <span class="file-title" id="file-title">Choose a PDF</span>
+              <span class="file-subtitle" id="file-subtitle">Drop or browse up to your configured limit</span>
+            </label>
+            <button class="primary-button" id="upload-button" type="submit">Upload and Index</button>
+          </form>
+
+          <div class="document-panel">
+            <div class="panel-label">Current Document</div>
+            <div class="document-name" id="document-name">No document uploaded</div>
+            <div class="status-row">
+              <span class="status-dot idle" id="status-dot"></span>
+              <span id="status-text">Waiting</span>
+            </div>
+            <button class="ghost-button" id="clear-button" type="button" disabled>Clear Session</button>
+          </div>
+        </aside>
+
+        <section class="chat-panel" aria-label="Ask questions">
+          <header class="chat-header">
+            <div>
+              <h2>Ask your PDF</h2>
+              <p id="header-copy">Upload a document and ask grounded questions with page citations.</p>
+            </div>
+            <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
+          </header>
+
+          <div class="messages" id="messages" aria-live="polite">
+            <div class="empty-state">
+              <h3>Ready when your document is.</h3>
+              <p>Answers will appear here with retrieved source snippets and page numbers.</p>
+            </div>
+          </div>
+
+          <form id="ask-form" class="composer">
+            <textarea
+              id="question-input"
+              rows="2"
+              placeholder="Ask a question about the uploaded PDF"
+              disabled
+            ></textarea>
+            <button class="send-button" id="ask-button" type="submit" disabled>Ask</button>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
