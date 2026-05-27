@@ -162,8 +162,23 @@ function addAnswer(payload) {
 
   const answer = document.createElement("div");
   answer.className = "answer-content";
-  const answerText = payload.cached ? `${payload.answer}\n\n_Cached answer._` : payload.answer;
-  answer.innerHTML = renderMarkdown(answerText);
+  // Header: answer + cached badge
+  const header = document.createElement("div");
+  header.className = "answer-header";
+
+  const answerText = payload.answer || "";
+  const answerBody = document.createElement("div");
+  answerBody.className = "answer-body";
+  answerBody.innerHTML = renderMarkdown(answerText);
+
+  if (payload.cached) {
+    const badge = document.createElement("span");
+    badge.className = "cached-badge";
+    badge.textContent = "Cached answer";
+    header.append(badge);
+  }
+
+  answer.append(header, answerBody);
   wrapper.append(answer);
 
   if (payload.citations?.length) {
@@ -175,10 +190,13 @@ function addAnswer(payload) {
       item.className = "citation";
 
       const heading = document.createElement("strong");
-      heading.textContent = `Page ${citation.page_number} · score ${citation.score.toFixed(3)}`;
+      const scorePct = Math.round((citation.score || 0) * 1000) / 10; // one decimal
+      heading.textContent = `Page ${citation.page_number} · ${scorePct}% relevance`;
 
-      const snippet = document.createElement("span");
-      snippet.textContent = citation.text;
+      const snippet = document.createElement("div");
+      snippet.className = "citation-snippet";
+      // Truncate long snippets and preserve simple markdown
+      snippet.innerHTML = renderMarkdown(truncateText(citation.text || "", 350));
 
       item.append(heading, snippet);
       citations.append(item);
@@ -261,6 +279,12 @@ function formatBytes(bytes) {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function truncateText(text, max) {
+  if (!text) return "";
+  if (text.length <= max) return text;
+  return text.slice(0, max - 1).trimEnd() + "…";
 }
 
 function renderMarkdown(markdown) {

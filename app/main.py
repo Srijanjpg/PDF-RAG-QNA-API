@@ -1,6 +1,8 @@
+import inspect
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from arq.connections import create_pool
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +11,7 @@ from redis.asyncio import Redis
 from app.api import router
 from app.config import get_settings
 from app.database import init_db
+from app.queue import redis_settings_from_url
 
 
 @asynccontextmanager
@@ -17,9 +20,13 @@ async def lifespan(app: FastAPI):
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     await init_db()
     app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    app.state.arq_redis = await create_pool(redis_settings_from_url(settings.redis_url))
     try:
         yield
     finally:
+        close_queue = app.state.arq_redis.close()
+        if inspect.isawaitable(close_queue):
+            await close_queue
         await app.state.redis.aclose()
 
 

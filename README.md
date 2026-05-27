@@ -16,7 +16,7 @@ FastAPI service for uploading PDFs and asking grounded questions over their cont
 - Vector search with PostgreSQL and `pgvector`
 - Redis-backed answer caching
 - Citation-rich responses that point back to the source chunks
-- Docker-based local development setup
+- Docker-based local development setup with a separate indexing worker
 
 ## Tech Stack
 
@@ -78,6 +78,8 @@ The default embedding model uses 1024-dimensional vectors. If you change `EMBEDD
 - [app/main.py](app/main.py) bootstraps the FastAPI app and static UI.
 - [app/api.py](app/api.py) contains the document upload, status, ask, and delete routes.
 - [app/tasks.py](app/tasks.py) handles PDF extraction, chunking, embedding, and persistence.
+- [app/queue.py](app/queue.py) contains Redis queue helpers for indexing jobs.
+- [app/worker.py](app/worker.py) runs the durable indexing worker.
 - [app/services/](app/services) contains the PDF, chunking, cache, and LLM helpers.
 
 ## License

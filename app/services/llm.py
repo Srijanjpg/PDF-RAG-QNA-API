@@ -28,8 +28,7 @@ class LLMClient:
 
     async def answer_question(self, question: str, citations: list[Citation]) -> str:
         context = "\n\n".join(
-            f"[chunk_id={citation.chunk_id} page={citation.page_number} "
-            f"score={citation.score:.3f}]\n{citation.text}"
+            f"Page {citation.page_number}:\n{citation.text}"
             for citation in citations
         )
         response = await self.client.chat.completions.create(
@@ -44,9 +43,12 @@ class LLMClient:
                     "content": (
                         "You answer questions using only the supplied PDF context. "
                         "If the context does not contain the answer, say you do not know. "
-                        "Format answers in clean Markdown with short paragraphs, bullets, "
-                        "numbered steps, and bold labels when they improve readability. "
-                        "Cite page numbers naturally in the answer when useful."
+                        "Format answers in clean Markdown using this structure:\n"
+                        "**Summary**: one sentence direct answer.\n"
+                        "**Key points**:\n"
+                        "- 2 to 4 concise bullets, only if they add value.\n"
+                        "Keep wording simple and user-friendly. "
+                        "Avoid repeating the question and do not include raw chunk IDs or scores."
                     ),
                 },
                 {
@@ -64,6 +66,13 @@ class LLMClient:
                 delta = chunk.choices[0].delta
                 if delta.content is not None:
                     answer_parts.append(delta.content)
-            return "".join(answer_parts)
+            return _normalize_answer("".join(answer_parts))
 
-        return response.choices[0].message.content or ""
+        return _normalize_answer(response.choices[0].message.content or "")
+
+
+def _normalize_answer(answer: str) -> str:
+    normalized = answer.replace("\r\n", "\n").strip()
+    while "\n\n\n" in normalized:
+        normalized = normalized.replace("\n\n\n", "\n\n")
+    return normalized

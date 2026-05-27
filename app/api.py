@@ -3,18 +3,25 @@ import uuid
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
+from arq.connections import ArqRedis
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.database import get_session
 from app.models import DocumentStatus
-from app.repositories import create_document, delete_document, get_document, search_chunks
+from app.queue import enqueue_document_index
+from app.repositories import (
+    create_document,
+    delete_document,
+    get_document,
+    search_chunks,
+    update_document_status,
+)
 from app.schemas import AskRequest, AskResponse, Citation, DocumentStatusResponse, DocumentUploadResponse
 from app.services.cache import get_cached_answer, make_question_cache_key, set_cached_answer
 from app.services.llm import LLMClient
-from app.tasks import process_document
 
 router = APIRouter()
 
@@ -23,12 +30,16 @@ def get_redis(request: Request) -> Redis:
     return request.app.state.redis
 
 
+def get_job_queue(request: Request) -> ArqRedis:
+    return request.app.state.arq_redis
+
+
 @router.post("/documents/upload", response_model=DocumentUploadResponse, status_code=201)
 async def upload_document(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
+    job_queue: ArqRedis = Depends(get_job_queue),
 ) -> DocumentUploadResponse:
     if file.content_type not in {"application/pdf", "application/x-pdf"}:
         raise HTTPException(status_code=400, detail="Only PDF uploads are supported")
@@ -59,7 +70,20 @@ async def upload_document(
         file_path=str(file_path),
     )
 
-    background_tasks.add_task(process_document, document.id, document.file_path)
+    try:
+        await enqueue_document_index(job_queue, document.id, document.file_path)
+    except Exception as exc:
+        await update_document_status(
+            session,
+            document.id,
+            DocumentStatus.FAILED,
+            error_message=f"Could not enqueue indexing job: {exc}",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Document was uploaded, but indexing could not be queued.",
+        ) from exc
+
     return DocumentUploadResponse(
         document_id=document.id,
         filename=document.filename,
@@ -99,7 +123,7 @@ async def ask_document(
     if document.status != DocumentStatus.READY:
         raise HTTPException(
             status_code=409,
-            detail=f"Document is {document.status}; wait until status is ready",
+            detail="Document is still processing. Please wait until it is ready.",
         )
 
     cache_key = make_question_cache_key(document_id, payload.question, settings)
@@ -124,7 +148,7 @@ async def ask_document(
 
     if not citations:
         response = AskResponse(
-            answer="I do not know based on the provided PDF context.",
+            answer="I could not find this in the uploaded PDF.",
             citations=[],
         )
     else:

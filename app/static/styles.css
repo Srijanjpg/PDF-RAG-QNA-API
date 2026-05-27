@@ -310,6 +310,21 @@ textarea:disabled {
   font-size: 15px;
 }
 
+.answer-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cached-badge {
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .answer-content h2,
 .answer-content h3,
 .answer-content h4 {
@@ -393,12 +408,13 @@ textarea:disabled {
   font-size: 13px;
 }
 
-.citation span {
+.citation-snippet {
+  color: var(--muted);
   display: -webkit-box;
   overflow: hidden;
-  color: var(--muted);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  line-height: 1.4;
 }
 
 .composer {
